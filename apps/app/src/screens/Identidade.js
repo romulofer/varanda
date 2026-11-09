@@ -323,7 +323,7 @@ function accepted (key, record) {
   noteDate(key, record.date)
 }
 
-function LinkCard ({ publicKey, memberCert, active, quiet, setup = false, onChanged, onLinked, onInviteChanged, feira = null }) {
+function LinkCard ({ publicKey, memberCert, active, quiet, setup = false, onChanged, onLinked, onInviteChanged, onKnown, feira = null }) {
   const node = useNode()
   const now = useNow(60000)
   // { key, status, pending } of the last load for this key.
@@ -430,6 +430,10 @@ function LinkCard ({ publicKey, memberCert, active, quiet, setup = false, onChan
   }, [load])
 
   const cur = acct !== null && acct.key === publicKey ? acct : null
+  // The shell keeps its splash over this step until the account answered (or
+  // failed), so the card never shows its own 'carregando…'.
+  const known = cur !== null || acctError !== ''
+  useEffect(() => { if (known && typeof onKnown === 'function') onKnown() }, [known, onKnown])
   const status = cur === null ? null : cur.status
   const linked = status !== null && status.linked === true
 
@@ -862,7 +866,7 @@ function LinkCard ({ publicKey, memberCert, active, quiet, setup = false, onChan
 // src/feiraEntry.js and the signup invite holder's writer; null otherwise.
 // onInviteChanged: the held signup code or its card changed here (a paste,
 // a drop), so the shell reads the card again.
-export default function Identidade ({ active, embedded = false, setup = false, view = 'all', step, index = 0, total = 3, onInfo, onLinked, onInviteChanged, invite = null, feira = null }) {
+export default function Identidade ({ active, embedded = false, setup = false, view = 'all', step, index = 0, total = 3, onInfo, onInfoError, onAccountKnown, initialInfo = null, onLinked, onInviteChanged, invite = null, feira = null }) {
   const styles = useStyles(makeStyles)
   const node = useNode()
   const outbox = useOutbox()
@@ -870,7 +874,7 @@ export default function Identidade ({ active, embedded = false, setup = false, v
   const pkStatus = passkey !== null ? passkey.status : null
   const locked = passkey !== null && (pkStatus === null || pkStatus.unlocked !== true)
   const generation = passkey !== null ? passkey.generation : 0
-  const [info, setInfo] = useState(null)
+  const [info, setInfo] = useState(initialInfo)
   const [identity, setIdentity] = useState(null)
   const [loadError, setLoadError] = useState('')
   const [certText, setCertText] = useState('')
@@ -944,12 +948,20 @@ export default function Identidade ({ active, embedded = false, setup = false, v
       setIdentity(i.publicKey === null ? null : await node.request('identity.show', {}))
       setLoadError('')
     } catch (err) {
-      setLoadError(errorText(err))
+      const text = errorText(err)
+      setLoadError(text)
+      // The shell keeps its splash over the setup step until node.info answers,
+      // so a failed read has to reach it or the error waits for the patience.
+      if (notify && typeof onInfoError === 'function') onInfoError(text)
     }
-  }, [node.request, onInfo])
+  }, [node.request, onInfo, onInfoError])
 
   // An unlock, lock or reset changed the identity: what was read is stale.
+  // The shell's info handed in at mount is current, so the first pass keeps it
+  // instead of flashing 'carregando…' until the read below answers.
+  const mountedGeneration = useRef(generation)
   useEffect(() => {
+    if (initialInfo !== null && generation === mountedGeneration.current) return
     setInfo(null)
     setIdentity(null)
     setLoadError('')
@@ -1576,6 +1588,7 @@ export default function Identidade ({ active, embedded = false, setup = false, v
             setup={setup}
             onChanged={refresh}
             onLinked={setup ? onLinked : undefined}
+            onKnown={onAccountKnown}
             feira={feira}
             onInviteChanged={onInviteChanged}
           />

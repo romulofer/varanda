@@ -2648,8 +2648,8 @@ Nenhuma verificação manual foi feita ainda. Todos os itens estão em aberto:
 - A sobreposição da web não conhece a fase real da conexão. Ela sai quando o app a remove, ou some sozinha em 20 s; se o app montar depois disso, o splash do app toca a entrada e passa a ser o anunciado para leitor de tela.
 - 1,5 s e 10 s são fixos, sem configuração.
 - No nativo não há desenho animado em SVG, porque o app não tem biblioteca SVG. A cadeira é o PNG de 128 px, mostrado no máximo a 96 px.
-- Na primeira abertura, se o nó ainda estiver conectando depois dos cartões, o splash do app toca a entrada de novo (a sobreposição web já saiu).
-- No nativo, o primeiro quadro do splash é transparente (a entrada parte da opacidade 0), como no splash anterior; com "reduzir movimento", a marca aparece de uma vez.
+- A entrada toca uma vez por execução: um splash que monta de novo (na primeira abertura, depois dos cartões) começa na pose final e só pulsa a barra.
+- No nativo, o primeiro quadro do splash não tem a cadeira (a entrada parte da opacidade 0), como no splash anterior; com "reduzir movimento", a marca aparece de uma vez. Mantido de propósito: a arte de abertura do Android (ícone de 1024 px no splash do sistema) e a do iOS (imagem em tela cheia) têm tamanho e posição diferentes da cadeira de 96 px, então começar com a cadeira visível a faria saltar em vez de emendar. Casar os dois pede ajuste em aparelho.
 - Uma queda da conexão logo depois de `ready`, ainda dentro do 1,5 s, segue o caminho de antes: o app já marcou a conexão como vista e não volta para Conectar.
 
 ### Splash até a primeira tela (fix/boot-splash-first-screen, 2026-11-03)
@@ -2664,6 +2664,20 @@ Antes, o splash saía cedo e deixava aparecer telas de espera (passkey "carregan
 6. [ ] Web: "Entrar" com a passkey aparece como antes, e depois de entrar as telas seguem como antes (não realizada ainda).
 7. [ ] Cartões de introdução, Termos e Conexão sem mudança (não realizada ainda).
 8. [ ] Depois de A Rua, bloquear e desbloquear não traz o splash de volta (não realizada ainda).
+
+### Sobras do splash e da abertura (fix/sobras-splash-onboarding)
+
+- Entrada única (`entranceWasPlayed` em `apps/app/src/ui/splashMotion.js`): o splash que monta de novo começa na pose final.
+- Passo "Escolha seu @nome": o splash segue até a conta responder ou falhar (`accountKnown` em `coverBoot`, sinal `onAccountKnown` do cartão de vínculo), sem o "carregando…" do próprio cartão. O teto de 10 s continua valendo.
+- `node.info` com passkey: um erro da `Identidade` chega à casca na hora (`onInfoError`), em vez de esperar os 10 s.
+- Configuração manual sem passkey: a `Identidade` já abre com o `node.info` da casca (`initialInfo`), sem o "carregando…" curto.
+- Troca de instalação: veja a seção 146.
+
+1. [ ] Primeira abertura lenta no Android: cartões, depois splash sem a cadeira entrar de novo (não realizada ainda).
+2. [ ] Passkey com `node.info` falhando: o erro aparece sem esperar 10 s (não realizada ainda).
+3. [ ] "Escolha seu @nome" abre sem "carregando…" (não realizada ainda).
+
+Limites que seguem: o primeiro quadro do splash nativo não tem a cadeira (decisão acima, em Limites), um perfil que só existe no meio do diário aparece "sem nome" até o histórico chegar (pede uma leitura do `profileSeq` do índice do semeador com `diary.peek`, que muda `names.js`; fica na #436), e o pré-splash da web segue o modo do sistema, não a escolha de Ajustes › Aparência, porque ajustar isso antes do JavaScript pede um script externo bloqueante (a CSP é `script-src 'self'`).
 
 ## 45. Passkey sem PRF: cartão Entrar com passos e "tentar de novo" (PR fix/passkey-no-prf-ux, 2026-10-30)
 
@@ -2703,9 +2717,9 @@ Nenhuma verificação foi feita ainda. Marcar só o que for de fato executado, c
 
 ### Limites que sobram
 
-- A lista de passkeys que falharam fica só na memória da página: depois de recarregar, o nó pode oferecer de novo uma passkey que já falhou, e o cartão só a nomeia quando ela falhar outra vez.
+- A lista de passkeys que falharam (com o nome para apagar) fica só na memória da página, de propósito: a §109 guarda as recusas para não oferecê-las de novo, mas nunca o nome, para não mandar apagar uma passkey que virou a conta em outro aparelho.
 - Tentar de novo no mesmo gerenciador sem PRF pode dar "já existe uma passkey do Varanda neste gerenciador: use entrar"; entrar com ela leva de volta ao cartão com os passos.
-- Os textos citam a Apple e o Google para todos; o app não detecta a plataforma.
+- Os passos do cartão não citam mais a Apple nem o Google: dizem "o do celular ou outro que sincronize", sem detectar a plataforma (`apps/app/test/passkeyTrouble.test.js`).
 - Se a passkey escolhida em Entrar era a da criação pendente, "concluir" continua aparecendo e, tocado, só diz "nenhuma criação de passkey pendente"; "Criar passkey" ao lado resolve. Esconder o "concluir" depois de uma falha dele perderia uma criação ainda viva quando a pessoa só fechou o diálogo, e a tela não distingue os dois casos. Essa passkey também não é nomeada para apagar. Saber qual das duas falhou exigiria o nó informar a criação pendente.
 - Os estados presos e as saídas novas (passkey sem sincronização, caminho pelo celular, passkeys recusadas guardadas, saída de uma passkey conhecida perdida) estão em §109; os resultados desta seção não foram refeitos.
 
@@ -3469,7 +3483,7 @@ Verificação do app nativo com todas as mudanças da pilha "celular primeiro" a
 
 - Aparelho real, emulador x86_64, build de release.
 - Entrar com passkey: precisa de conta Google e bloqueio de tela no emulador, que não foram criados. Além disso, o build de debug (`app.varanda.debug`) não casa com o `assetlinks` da instalação de produção (`app.varanda`), então não entra por passkey nela. Por isso nenhuma tela autenticada foi aberta, inclusive cadeira e comunidade depois do login.
-- O rodapé "Conexão" nos passos de configuração do celular com a instalação ficou como na `main` (escondido): mostrá-lo deixaria trocar de instalação no meio do cadastro, e a política de idade, o resultado da idade e o convite guardado ainda não são zerados por instalação nesse caminho. Fica para um PR próprio.
+- O rodapé "Conexão" nos passos de configuração do celular com a instalação ficou como na `main` (escondido) nesta seção. Passou a aparecer na seção 146 (troca de instalação).
 - Push do sistema, login no iOS.
 - O workflow `native.yml` não foi disparado.
 
@@ -6833,3 +6847,18 @@ Limites desta caminhada:
 - Nenhuma caixa acima foi marcada nesta documentação.
 - Os testes conferem as respostas da demonstração, não a tela. Fotos, controles de oferta e posição só se confirmam no aparelho ou no simulador.
 - Os controles de oferta nunca foram revistos na demonstração antes desta mudança: a caminhada acima é a primeira revisão deles.
+
+## 146. Troca de instalação no cadastro do celular (PR fix/sobras-splash-onboarding)
+
+O rodapé "Conexão" agora aparece nos passos de configuração do app instalado (`!node.canConfigure` esconde-o só na página hospedada, onde não há o que configurar). Trocar a instalação no meio do cadastro:
+
+- A política de idade, o resultado da idade e a entrada da Feira já levam a origem da instalação (`ageOrigin`) e leem como "não lidos" sob outra, então não são zerados à mão.
+- O convite de cadastro guardado não leva origem: `swappedInstallation` (`apps/app/src/installationSwap.js`) detecta a troca e `App.js` descarta o convite e o cartão dele. Ir de "instalação desconhecida" para a salva (abertura a frio) não conta como troca, para não perder um convite capturado de um link nesse meio-tempo.
+
+Testes: `apps/app/test/installationSwap.test.js`.
+
+1. [ ] No Android, no passo de idade ou de vínculo, o rodapé "Conexão" aparece; trocar de instalação leva ao splash e à tela da nova instalação, com o convite antigo descartado (não realizada ainda).
+2. [ ] Voltar para a instalação original: a idade e a política são lidas de novo, sem valor da outra (não realizada ainda).
+3. [ ] Abertura a frio por um link de convite, sem trocar nada: o convite continua (não realizada ainda).
+
+Limites: o `sessionStorage` da web não é tocado (a página hospedada não troca de instalação).

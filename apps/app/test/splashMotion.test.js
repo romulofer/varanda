@@ -45,6 +45,22 @@ test('splashMotion: reduced motion settles at once', async (t) => {
   }
 })
 
+test('splashMotion: the entrance is played once per run', async (t) => {
+  const { entranceWasPlayed, markEntrancePlayed, resetEntrance } = await load()
+  resetEntrance()
+  t.is(entranceWasPlayed(), false)
+  markEntrancePlayed()
+  t.is(entranceWasPlayed(), true)
+  markEntrancePlayed()
+  t.is(entranceWasPlayed(), true, 'marking again keeps it')
+  resetEntrance()
+  t.is(entranceWasPlayed(), false)
+  const splash = fs.readFileSync(path.join(__dirname, '../src/ui/Splash.js'), 'utf8')
+  t.ok(splash.includes('replay.current = entranceWasPlayed()'), 'a later mount reads the latch before it marks it')
+  t.ok(splash.includes('else if (replay.current) startPulse()'), 'a later mount pulses without entering again')
+  t.ok(splash.includes('markEntrancePlayed()'))
+})
+
 test('splashMotion: stays pure', (t) => {
   const src = fs.readFileSync(path.join(__dirname, '../src/ui/splashMotion.js'), 'utf8')
   for (const bad of ["from 'react", 'require(', 'node:', './theme']) {

@@ -17,6 +17,14 @@ const LETTER_TO = { opacity: 1, translateY: 0 }
 const HINT_FROM = { opacity: 0 }
 const HINT_TO = { opacity: 1 }
 
+// The entrance plays once per run. The splash can mount again after the cards
+// on a first open (the overlay or the first splash already played it), and a
+// second entrance would restart something the person has seen.
+let played = false
+export function entranceWasPlayed () { return played }
+export function markEntrancePlayed () { played = true }
+export function resetEntrance () { played = false }
+
 export function splashMotion (reduced) {
   const step = (delay, duration, from, to) => reduced === true
     ? { delay: 0, duration: 0, from: { ...to }, to: { ...to } }

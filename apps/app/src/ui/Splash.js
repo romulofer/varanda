@@ -17,7 +17,7 @@ import { light, statusBarStyle } from '../appearance'
 import { useStyles, useTheme } from './ThemeProvider'
 import { fonts, type } from './theme'
 import { loopTiming } from './loopMotion'
-import { BAR_MS, BAR_WIDTH, SPLASH_LABEL, SPLASH_WORD, PULSE_MS, splashMotion } from './splashMotion'
+import { BAR_MS, BAR_WIDTH, SPLASH_LABEL, SPLASH_WORD, PULSE_MS, entranceWasPlayed, markEntrancePlayed, splashMotion } from './splashMotion'
 
 const mark = require('../../assets/cadeira.png')
 
@@ -39,6 +39,9 @@ export function Splash ({ sidePad = 0, edges, progress = 0 }) {
   const scheme = native ? 'light' : theme.scheme
   const full = useRef(null)
   if (full.current === null) full.current = splashMotion(false)
+  // A later mount starts at the final pose instead of entering again.
+  const replay = useRef(null)
+  if (replay.current === null) replay.current = entranceWasPlayed()
   const shellRef = useRef(undefined)
   if (shellRef.current === undefined) {
     let el = !native && typeof document !== 'undefined'
@@ -56,7 +59,7 @@ export function Splash ({ sidePad = 0, edges, progress = 0 }) {
   const [underShell, setUnderShell] = useState(() => shellRef.current !== null)
   const chair = useRef(null)
   if (chair.current === null) {
-    const f = full.current.chair.from
+    const f = replay.current ? full.current.chair.to : full.current.chair.from
     chair.current = {
       opacity: new Animated.Value(f.opacity),
       translateY: new Animated.Value(f.translateY),
@@ -66,13 +69,13 @@ export function Splash ({ sidePad = 0, edges, progress = 0 }) {
   }
   const letters = useRef(null)
   if (letters.current === null) {
-    letters.current = full.current.letters.map((l) => ({
-      opacity: new Animated.Value(l.from.opacity),
-      translateY: new Animated.Value(l.from.translateY)
-    }))
+    letters.current = full.current.letters.map((l) => {
+      const f = replay.current ? l.to : l.from
+      return { opacity: new Animated.Value(f.opacity), translateY: new Animated.Value(f.translateY) }
+    })
   }
   const hintOpacity = useRef(null)
-  if (hintOpacity.current === null) hintOpacity.current = new Animated.Value(full.current.hint.from.opacity)
+  if (hintOpacity.current === null) hintOpacity.current = new Animated.Value((replay.current ? full.current.hint.to : full.current.hint.from).opacity)
   const fill = useRef(null)
   if (fill.current === null) fill.current = new Animated.Value(unit(progress))
   // Reduce motion (or the silent splash under the web overlay): the fill
@@ -169,6 +172,7 @@ export function Splash ({ sidePad = 0, edges, progress = 0 }) {
     }
     let sub = null
     let onExpire = null
+    markEntrancePlayed()
     if (shell) {
       settle()
       // The overlay hides itself at 20 s; from then on this splash is the
@@ -197,6 +201,7 @@ export function Splash ({ sidePad = 0, edges, progress = 0 }) {
         Promise.resolve(AccessibilityInfo.isReduceMotionEnabled()).then((reduce) => {
           if (cancelled) return
           if (reduce === true) settle()
+          else if (replay.current) startPulse()
           else play()
         }, skip)
       } catch {
